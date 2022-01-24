@@ -618,6 +618,11 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		level.Error(pCtx.Logger).Log("msg", "Failed to convert map[string]=string to json", "err", err)
 	}
 
+	var g []string
+	for _, v := range pCtx.Grouping {
+		g = append(g, fmt.Sprintf("%s:%s", v.Name, v.Value))
+	}
+	level.Info(pCtx.Logger).Log("metric_grouping", strings.Join(g, ","))
 	level.Info(pCtx.Logger).Log("metric_constant_labels", j)
 	level.Info(pCtx.Logger).Log("metric_variable_labels", strings.Join(pCtx.VariableLabels, ","))
 
