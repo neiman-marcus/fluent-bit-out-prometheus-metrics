@@ -51,6 +51,11 @@ type Gauge struct {
 	SubKey string
 }
 
+type Group struct {
+	Name  string
+	Value string
+}
+
 type MetricData struct {
 	Gauge
 	Summary
@@ -59,6 +64,7 @@ type MetricData struct {
 	Name           string
 	Help           string
 	ConstantLabels prometheus.Labels
+	Grouping       []Group
 	VariableLabels []string
 }
 
@@ -174,6 +180,23 @@ func (m *MetricData) SetMetricConstantLabels(l string, logger log.Logger) {
 		if err != nil {
 			level.Error(logger).Log("msg", "Metric Label JSON issue", "input", l, "err", err)
 			panic(err)
+		}
+	}
+}
+
+// SetMetricGrouping func (m *MetricData) SetMetricGrouping(g string, logger log.Logger) { Set context metric_grouping
+// Required: No
+func (m *MetricData) SetMetricGrouping(g string, logger log.Logger) {
+	if len(g) != 0 {
+		groups := strings.Split(StripWhitespace(g), ",")
+		for _, group := range groups {
+			nameValue := strings.Split(StripWhitespace(group), ":")
+			if len(nameValue) != 2 {
+				level.Warn(logger).Log("msg", "Metric Grouping must consist of name:value pairs", "grouping", g, "ignoring", group)
+			} else {
+				level.Debug(logger).Log("msg", "Append grouping", "name", nameValue[0], "value", nameValue[1])
+				m.Grouping = append(m.Grouping, Group{nameValue[0], nameValue[1]})
+			}
 		}
 	}
 }
@@ -515,6 +538,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	pCtx.SetMetricName(output.FLBPluginConfigKey(plugin, "metric_name"))
 	pCtx.SetMetricHelp(output.FLBPluginConfigKey(plugin, "metric_help"))
 	pCtx.SetMetricConstantLabels(output.FLBPluginConfigKey(plugin, "metric_constant_labels"), pCtx.Logger)
+	pCtx.SetMetricGrouping(output.FLBPluginConfigKey(plugin, "metric_grouping"), pCtx.Logger)
 	pCtx.SetMetricVariableLabels(output.FLBPluginConfigKey(plugin, "metric_variable_labels"))
 
 	if pCtx.IsSummary() {
@@ -621,6 +645,10 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	// Initialize new metric with push gateway
 	pCtx.Pusher = push.New(pCtx.URL, pCtx.Job).Gatherer(registry)
+	for _, group := range pCtx.Grouping {
+		level.Debug(pCtx.Logger).Log("Add Group: name", group.Name, ", Value", group.Value)
+		pCtx.Pusher = pCtx.Pusher.Grouping(group.Name, group.Value)
+	}
 
 	if err := pCtx.Pusher.Add(); err == nil {
 		// Reset retry counter to zero and return error
