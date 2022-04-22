@@ -26,3 +26,5 @@ services:
       - pushgateway
     networks:
       - grafana_net
+    deploy:
+      replicas: 2
